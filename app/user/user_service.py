@@ -12,7 +12,9 @@ class UserService:
         
     def register_user(self, new_user: User) -> User:
         ## TODO
-        new_user = None
+        if self.repo.get_user_by_email(new_user.email) is not None:
+            raise ValueError("User already Exists.")
+        self.repo.save_user(new_user)
         return new_user
 
     def delete_user(self, email: str) -> User:
