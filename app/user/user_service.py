@@ -14,6 +14,10 @@ class UserService:
         ## TODO
         if self.repo.get_user_by_email(new_user.email) is not None:
             raise ValueError("User already Exists.")
+        elif new_user.password == "":
+            raise ValueError("Please enter your passward")
+        elif new_user.username == "":
+            raise ValueError("Please enter your name")
         self.repo.save_user(new_user)
         return new_user
 
