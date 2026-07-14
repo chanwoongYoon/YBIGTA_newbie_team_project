@@ -18,14 +18,18 @@ class UserService:
         ## TODO
         if self.repo.get_user_by_email(new_user.email) is not None:
             raise ValueError("User already Exists.")
+        elif new_user.password == "":
+            raise ValueError("Please enter your password")
+        elif new_user.username == "":
+            raise ValueError("Please enter your name")
         self.repo.save_user(new_user)
         return new_user
 
     def delete_user(self, email: str) -> User:
         ## TODO
-        if self.repo.get_user_by_email(email) is None:
-            raise ValueError("User not Found.")
         deleted_user = self.repo.get_user_by_email(email)
+        if (deleted_user is None):
+            raise ValueError("User not Found.")
         self.repo.delete_user(deleted_user)
         return deleted_user
 
