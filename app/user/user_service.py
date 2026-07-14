@@ -18,8 +18,11 @@ class UserService:
         return new_user
 
     def delete_user(self, email: str) -> User:
-        ## TODO        
-        deleted_user = None
+        ## TODO
+        if self.repo.get_user_by_email(email) is None:
+            raise ValueError("User not Found.")
+        deleted_user = self.repo.get_user_by_email(email)
+        self.repo.delete_user(deleted_user)
         return deleted_user
 
     def update_user_pwd(self, user_update: UserUpdate) -> User:
