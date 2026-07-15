@@ -5,60 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management</title>
     <style>
+        /* 기본 폰트, 연한 회색 배경 */
+        * {
+            box-sizing: border-box;
+        }
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
+            font-family: 'Apple SD Gothic Neo', 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
             text-align: center;
-            background-color: #f4f5f7;
+            background-color: #f7f7f8;
+            color: #333;
         }
-        #콘테이너 스타일 깔끔하게
+        /* 컨테이너: 심플한 흰색 카드 */
         .container {
-            max-width: 600px;
-            margin: 30px auto;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 25px;
+            max-width: 420px;
+            margin: 0 auto 24px;
+            border: 1px solid #e5e5e5;
+            border-radius: 10px;
+            padding: 30px;
             background-color: white;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
-        #제목 폰트, 색깔 변경
+        /* 제목 스타일 */
         h1 {
-            color: #2c3e50;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 24px;
         }
         h2 {
-            color: #444;
+            font-size: 16px;
             font-weight: 600;
+            color: #555;
+            margin-bottom: 12px;
         }
         form {
-            margin: 20px 0;
+            margin: 12px 0 0;
         }
+        /* 입력창 스타일 */
         input {
-            padding: 10px;
+            padding: 10px 12px;
             margin: 5px 0;
-            width: 80%;
-            font-size: 16px;
+            width: 100%;
+            font-size: 15px;
+            border: 1px solid #d5d5d5;
+            border-radius: 6px;
         }
-        #버튼 스타일 변경
+        /* 입력창 포커스 시 테두리 강조 */
+        input:focus {
+            outline: none;
+            border-color: #888;
+        }
+        /* 버튼 스타일 */
         button {
-            padding: 10px 20px;
-            margin: 10px;
-            font-size: 16px;
+            padding: 10px 24px;
+            margin-top: 10px;
+            font-size: 15px;
             cursor: pointer;
-            background-color: #4f46e5;
+            background-color: #333;
             color: white;
             border: none;
-            border-radius: 8px;
-            transition: background-color 0.2s ease;
+            border-radius: 6px;
         }
-        #hover시 진한 색으로 표시
         button:hover {
-            background-color: #4338ca;
+            background-color: #555;
         }
+        /* 회원 삭제 버튼은 위험 동작이므로 빨간색 */
+        .danger-btn {
+            background-color: #d64545;
+        }
+        .danger-btn:hover {
+            background-color: #b93b3b;
+        }
+        /* 섹션 구분선 */
         .section {
-            margin-bottom: 30px;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #eee;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
         }
     </style>
 </head>
@@ -96,7 +123,7 @@
 
         <div class="section" id="delete-section">
             <h2>Delete Account</h2>
-            <button type="button" onclick="deleteUser()">Delete Account</button>
+            <button type="button" class="danger-btn" onclick="deleteUser()">Delete Account</button>
         </div>
     </div>
 
@@ -122,6 +149,7 @@
             })
             .then(data => {
                 userEmail = email; // 로그인 성공 시 이메일 저장
+                document.getElementById('login-form').reset(); // 입력창 초기화
                 document.getElementById('username').textContent = `Hello, ${data.username}!`; // 사용자 이름 표시
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('logged-in-screen').style.display = 'block';
@@ -147,7 +175,10 @@
                 }
                 return response.json();
             })
-            .then(() => alert(`Registration successful! Welcome, ${username}.`)) // 성공 메시지에 사용자 이름 표시
+            .then(() => {
+                document.getElementById('register-form').reset(); // 입력창 초기화
+                alert(`Registration successful! Welcome, ${username}.`); // 성공 메시지에 사용자 이름 표시
+            })
             .catch(error => alert(`Registration failed: ${error.message}`));
         }
 
@@ -167,7 +198,10 @@
                 }
                 return response.json();
             })
-            .then(() => alert(`Password successfully updated!`)) // 성공 메시지
+            .then(() => {
+                document.getElementById('update-password-form').reset(); // 입력창 초기화
+                alert(`Password successfully updated!`); // 성공 메시지
+            })
             .catch(error => alert(`Password update failed: ${error.message}`));
         }
 
@@ -192,6 +226,7 @@
             })
             .then(() => {
                 alert(`User deleted successfully!`);
+                document.getElementById('update-password-form').reset(); // 로그인 화면으로 돌아가기 전 입력창 초기화
                 document.getElementById('logged-in-screen').style.display = 'none';
                 document.getElementById('login-screen').style.display = 'block';
                 userEmail = null; // 이메일 초기화
