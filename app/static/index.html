@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management</title>
+    <style>
+        /* 기본 폰트, 연한 회색 배경 */
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Apple SD Gothic Neo', 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            text-align: center;
+            background-color: #f7f7f8;
+            color: #333;
+        }
+        /* 컨테이너: 심플한 흰색 카드 */
+        .container {
+            max-width: 420px;
+            margin: 0 auto 24px;
+            border: 1px solid #e5e5e5;
+            border-radius: 10px;
+            padding: 30px;
+            background-color: white;
+        }
+        /* 제목 스타일 */
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 24px;
+        }
+        h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 12px;
+        }
+        form {
+            margin: 12px 0 0;
+        }
+        /* 입력창 스타일 */
+        input {
+            padding: 10px 12px;
+            margin: 5px 0;
+            width: 100%;
+            font-size: 15px;
+            border: 1px solid #d5d5d5;
+            border-radius: 6px;
+        }
+        /* 입력창 포커스 시 테두리 강조 */
+        input:focus {
+            outline: none;
+            border-color: #888;
+        }
+        /* 버튼 스타일 */
+        button {
+            padding: 10px 24px;
+            margin-top: 10px;
+            font-size: 15px;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 6px;
+        }
+        button:hover {
+            background-color: #555;
+        }
+        /* 회원 삭제 버튼은 위험 동작이므로 빨간색 */
+        .danger-btn {
+            background-color: #d64545;
+        }
+        .danger-btn:hover {
+            background-color: #b93b3b;
+        }
+        /* 섹션 구분선 */
+        .section {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #eee;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="login-screen">
+        <h1>User Management</h1>
+        <div class="section" id="login-section">
+            <h2>Login</h2>
+            <form id="login-form">
+                <input type="email" id="login-email" placeholder="Email" required><br>
+                <input type="password" id="login-password" placeholder="Password" required><br>
+                <button type="button" onclick="loginUser()">Login</button>
+            </form>
+        </div>
+        <div class="section" id="register-section">
+            <h2>Register</h2>
+            <form id="register-form">
+                <input type="email" id="register-email" placeholder="Email" required><br>
+                <input type="password" id="register-password" placeholder="Password" required><br>
+                <input type="text" id="register-username" placeholder="Username" required><br>
+                <button type="button" onclick="registerUser()">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="logged-in-screen" style="display: none;">
+        <h1>Welcome, <span id="username"></span></h1>
+        <div class="section" id="update-password-section">
+            <h2>Update Password</h2>
+            <form id="update-password-form">
+                <input type="password" id="update-password" placeholder="New Password" required><br>
+                <button type="button" onclick="updatePassword()">Update Password</button>
+            </form>
+        </div>
+
+        <div class="section" id="delete-section">
+            <h2>Delete Account</h2>
+            <button type="button" class="danger-btn" onclick="deleteUser()">Delete Account</button>
+        </div>
+    </div>
+
+    <script>
+        let userEmail = null;
+
+        function loginUser() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            fetch('/api/user/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(error => { throw new Error(error.detail); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                userEmail = email; // 로그인 성공 시 이메일 저장
+                document.getElementById('login-form').reset(); // 입력창 초기화
+                document.getElementById('username').textContent = `Hello, ${data.username}!`; // 사용자 이름 표시
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('logged-in-screen').style.display = 'block';
+            })
+            .catch(error => alert(`Login failed: ${error.message}`));
+        }
+
+        function registerUser() {
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const username = document.getElementById('register-username').value;
+
+            fetch('/api/user/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password, username })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(error => { throw new Error(error.detail); });
+                }
+                return response.json();
+            })
+            .then(() => {
+                document.getElementById('register-form').reset(); // 입력창 초기화
+                alert(`Registration successful! Welcome, ${username}.`); // 성공 메시지에 사용자 이름 표시
+            })
+            .catch(error => alert(`Registration failed: ${error.message}`));
+        }
+
+        function updatePassword() {
+            const newPassword = document.getElementById('update-password').value;
+
+            fetch('/api/user/update-password', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: userEmail, new_password: newPassword })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(error => { throw new Error(error.detail); });
+                }
+                return response.json();
+            })
+            .then(() => {
+                document.getElementById('update-password-form').reset(); // 입력창 초기화
+                alert(`Password successfully updated!`); // 성공 메시지
+            })
+            .catch(error => alert(`Password update failed: ${error.message}`));
+        }
+
+        function deleteUser() {
+            if (!userEmail) {
+                alert("No user is logged in.");
+                return;
+            }
+
+            fetch('/api/user/delete', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: userEmail }) // 저장된 이메일 전송
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(error => { throw new Error(error.detail); });
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert(`User deleted successfully!`);
+                document.getElementById('update-password-form').reset(); // 로그인 화면으로 돌아가기 전 입력창 초기화
+                document.getElementById('logged-in-screen').style.display = 'none';
+                document.getElementById('login-screen').style.display = 'block';
+                userEmail = null; // 이메일 초기화
+            })
+            .catch(error => alert(`Account deletion failed: ${error.message}`));
+        }
+    </script>
+</body>
+</html>
