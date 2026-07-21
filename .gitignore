@@ -297,3 +297,16 @@ error.log
 # 로컬 테스트용 DB (FastAPI 환경에서 자주 쓰는 임시 파일)
 test.db
 test.sqlite3
+# 크롤링 과제 임시 파일
+diag_*.py
+debug_*.py
+test_500.py
+*_dump*.html
+dump_*.html
+next_data.json
+rt_api.json
+mc_api.json
+app.log
+
+diag*.py
+*.deb

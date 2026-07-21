@@ -17,3 +17,8 @@ starlette==0.41.3
 tomli==2.2.1
 typing_extensions==4.12.2
 uvicorn==0.34.0
+selenium==4.46.0
+beautifulsoup4==4.15.0
+lxml==6.1.1
+pandas==3.0.3
+requests==2.34.2
