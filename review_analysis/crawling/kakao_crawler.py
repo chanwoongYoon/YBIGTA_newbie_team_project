@@ -1,3 +1,9 @@
+"""카카오맵 장소(경복궁) 리뷰 크롤러.
+
+Selenium으로 리뷰 목록을 동적 로딩(더보기 클릭/스크롤)하고 본문 '더보기'를 펼친 뒤,
+BeautifulSoup으로 page_source를 파싱해 별점/날짜/본문을 추출·저장한다.
+"""
+
 from __future__ import annotations
 
 import logging
