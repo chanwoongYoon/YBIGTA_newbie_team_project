@@ -1,13 +1,19 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from argparse import ArgumentParser
 from typing import Dict, Type
 from review_analysis.crawling.base_crawler import BaseCrawler
 from review_analysis.crawling.example_crawler import ExampleCrawler
 from review_analysis.crawling.kakao_crawler import KakaoCrawler
+from review_analysis.crawling.naver_map_crawler import NaverMapCrawler
 
 # 모든 크롤링 클래스를 예시 형식으로 적어주세요.
 CRAWLER_CLASSES: Dict[str, Type[BaseCrawler]] = {
     "example": ExampleCrawler,
     "kakao_map": KakaoCrawler,
+    "naver": NaverMapCrawler,
 }
 
 def create_parser() -> ArgumentParser:

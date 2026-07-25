@@ -296,4 +296,4 @@ error.log
 
 # 로컬 테스트용 DB (FastAPI 환경에서 자주 쓰는 임시 파일)
 test.db
-test.sqlite3
+test.sqlite3app.log
