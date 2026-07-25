@@ -112,11 +112,21 @@ class KyoboCrawler(BaseCrawler):
         except (ElementClickInterceptedException, StaleElementReferenceException):
             return False
 
+    FILLED_ICON_FILL = "#4DAC27"
+
     @staticmethod
     def _parse_rating(li: Any) -> Optional[float]:
-        """클로버 별점 아이콘(<li> 개수)을 세어 별점을 계산한다."""
-        icons = li.select("div.flex.items-center.justify-between ul.flex.items-center > li")
-        return float(len(icons)) if icons else None
+        """클로버 별점 아이콘 중 채워진(fill=#4DAC27) 것만 세어 별점을 계산한다.
+
+        위젯은 항상 4개의 아이콘 슬롯을 렌더링하며, 그중 점수만큼만 초록색(#4DAC27)으로
+        채워지고 나머지는 회색(#EAEAEA)이다. 아이콘 총 개수를 세면 항상 4가 나오므로
+        채워진 아이콘만 걸러야 한다.
+        """
+        icons = li.select("div.flex.items-center.justify-between ul.flex.items-center > li svg")
+        if not icons:
+            return None
+        filled = [icon for icon in icons if icon.get("fill") == KyoboCrawler.FILLED_ICON_FILL]
+        return float(len(filled))
 
     @staticmethod
     def _parse_date(li: Any) -> Optional[str]:
