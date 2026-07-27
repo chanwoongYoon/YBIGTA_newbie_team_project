@@ -76,13 +76,7 @@ class YES24Processor(BaseDataProcessor):
     def feature_engineering(self):
         df = self.df
 
-        # 파생변수 1: 전처리 후 리뷰 길이
-        df["review_length"] = df["review_comment_clean"].str.len()
-
-        # 파생변수 2: 요일
-        df["review_weekday"] = df["review_date"].dt.day_name()
-
-        # 파생변수 3: 감성 레이블 (5점 만점 기준 4점 이상 = 긍정)
+        # 파생변수 (5점 만점 기준 4점 이상 = 긍정)
         df["sentiment_label"] = (df["review_stars"] >= 4).astype(int)
 
         # 형태소 분석 -> 명사/용언 어근만 추출, 불용어 제거
