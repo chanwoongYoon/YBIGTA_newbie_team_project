@@ -74,6 +74,9 @@ class KyoboProcessor(BaseDataProcessor):
         # sentiment_label: 별점 기준으로 긍정/부정 나누기
         df["sentiment_label"] = (df[column_name["review_stars"]] >= 4).astype(int)
 
+        # review_length: 원본 리뷰 글자 수 (형태소 분석으로 review 컬럼이 바뀌기 전에 계산)
+        df["review_length"] = df[column_name["review_comment"]].str.len()
+
         # review 컬럼을 형태소 분석된 텍스트로 바꾸기
         df[column_name["review_comment"]] = df[column_name["review_comment"]].apply(self.tokenize_review)
 
