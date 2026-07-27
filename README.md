@@ -71,3 +71,51 @@ python main.py -o ../../database -c kyobo
 
 Selenium + Chrome 드라이버가 필요하다.
 
+## 리뷰 데이터 크롤링 — Goodreads (담당: 예린)
+
+### 데이터 소개
+
+| 항목 | 내용 |
+|---|---|
+| 사이트 | Goodreads - 불편한 편의점 ([https://www.yes24.com/product/goods/99308021](https://www.goodreads.com/book/show/58481813/reviews?reviewFilters=eyJhZnRlciI6Ik1UUXdNU3d4TnpNM01ESTFNVGd5TlRZNSJ9)) |
+| 대상 | 도서 <불편한 편의점> 리뷰 |
+| 수집 개수 | 500개 |
+| 저장 경로 | database/reviews_goodreads.csv |
+| 인코딩 | UTF-8 (BOM) |
+
+**데이터 형식**
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| date | str | 리뷰 작성일 (YYYY-MM-DD) |
+| stars | int | 회원 별점 (0~5점) |
+| review | str | 리뷰 본문 |
+
+### 코드 동작 방식
+
+**API.py 동작 방식**
+1. resourceID(굿리즈 작품 고유 ID)로 지정된 <불편한 편의점> 책의 리뷰를 30개 단위로 요청
+2. 응답의 'pageInfo.nextPageToken'을 다음 요청의 'pagination.after'에 넣어 반복 호출
+3. 3700+ 총 리뷰에 'MAX_REVIEWS' 상한을 두어 500개를 채우면 수집 종료 / 다음 페이지가 없어도 종료하는 것으로 설정
+4. 별점이 없거나 작성일이 없는 리뷰 제외
+5. 'createdAt' 타임스탬프를 'YYYY-MM-DD' str 로 변환해 다른 csv 파일과 형식 맞춤
+6. 리뷰 본문에 섞인 HTML 태그를 Beautiful Soup으로 제거
+
+**왜 Selenium이 아닌 API 직접 호출인가**
+- Selenium으로 리뷰 목록(GoodsReviewList)을 PageNumber 단위 URL로 순회하며 수집하였으나, 30개 수집 후 "show more reviews" 버튼 눌러 다음 페이지로 넘어갈때 봇 감지 -> 실패
+- Selenium 코드로는 봇 감지가 되어, 비로그인 상태로 코드를 돌리면 30개가 수집 상한
+- 500개+ 수집을 위해서 HTML 구조 확인: Goodreads 프론트엔드는 "show more reviews" 버튼을 누를때 Gr
+- aphql API 호출로 다음 페이지를 불러오는 방식
+- 다음 페이지로 넘어가는 호출을 코드로 직접한다면, 봇 감지 없이 원하는 만큼 리뷰 수집 가능.
+
+**한계**
+- 실제 Goodreads에서 페이지를 넘길때 쓰는 'X-Api-Key' 공개 api key를 코드에 하드 코딩하여, api key 변경시 코드가 작동하지 않을 수 있음
+- 실제 api key를 public git에 업로드하는 것은 권장되지 않는다는 걸 인지하고 있으나, 대안책으로 매번 env에서 팀원들/ 과제 검수하는 분들이 api key를 직접 찾는 것도 번거롭고 별로라는 생각이 들었습니다. 
+
+### 실행 방법
+
+```bash
+python review_analysis/crawling/goodreads_api.py
+```
+
+
