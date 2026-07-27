@@ -253,7 +253,7 @@ python main.py --output_dir ../../database --all
 python make_tableau_data.py
 ```
 ---
-## 리뷰 데이터 크롤링 — Goodreads (담당: 예린)
+## 1. 리뷰 데이터 크롤링 — Goodreads (담당: 예린)
 
 ### 데이터 소개
 
@@ -300,4 +300,46 @@ python make_tableau_data.py
 python review_analysis/crawling/goodreads_api.py
 ```
 
+## 2. Goodreads 크롤링 데이터 전처리/FE (담당: 예린)
 
+###전처리 이전 번역하는 코드 작성
+전처리 과정 (preprocessing 스켈레톤 코드 사용해 'goodreads_processor.py' 작성) 이전에, 
+다양한 언어로 되어 있는 goodreads 본문 리뷰를 번역하는 코드 'review_analysis/crawling/goodreads_translator.py'를 작성해, 
+"reviews_goodreads_ko.csv"를 생성했습니다.
+
+
+### 전처리 코드
+"reviews_goodreads_ko.csv"를 전처리로 한 번 더 정제하는 코드를 작성했습니다. 
+`review_analysis/preprocessing/goodreads_processor.py`의 `GoodreadsProcessor`(`BaseDataProcessor` 상속)로 구현했습니다.
+- 필수 컬럼: stars(1~5 정수 별점), date, review(리뷰 원문)
+- 생성자(__init__)에서 input_path를 utf-8-sig 인코딩으로 읽어 self.df에 로드합니다.
+
+**결측치 처리**
+- `date`, `stars`, `review` 칼럼에 대해 `dropna` 적용해 하나라도 비어있는 행을 정리했습니다. 
+
+**이상치 처리**
+- **별점**: 1~5 범위를 벗어난 값 제거했습니다.
+- **리뷰 길이**: 텍스트 정리가 끝난 정제된 리뷰 기준으로 길이가 10자 미만이거나 1000자를 초과하는 행을 제거했습니다.
+(기존에는 이 과정이 텍스트 정리 이전에 왔으나, run했을때 이모티콘 등이 제거되지 않은 리뷰의 경우, 1000자 초과 행이 많으며,
+1000자가 유효한 이상치 기준이라 볼 수 없어 텍스트 정리 후, 코드상 리뷰길이에 대한 이상치 처리를 진행했습니다.)
+
+**텍스트 정리**
+- **특수문자 제거**: 한글(가-힣), 영문자, 숫자, 공백을 제외한 모든 문자를 공백(" ")으로 치환합니다.
+- **공백 제거**: 연속된 공백을 하나로 합치고 앞뒤 공백을 제거합니다.
+
+###Feature Engineering 코드 
+**감성 레이블 생성**
+- stars >= 4인 경우 is_positive = 1, 아니면 0으로 하는 이진 파생변수를 만듭니다.
+  
+**TF-IDF 벡터화**
+- 정제된 review 컬럼을 TfidfVectorizer(max_features=300)로 벡터화하여 최대 300개의 단어 특징을 추출합니다.
+  
+**결합** 
+- TF-IDF 결과를 데이터프레임으로 변환한 뒤, 기존 데이터프레임(stars, date, review, is_positive)과 컬럼 방향(axis=1)으로 합칩니다.
+
+###Save to database 코드
+**전처리, FE가 끝난 결과를 전부 csv 파일에 저장합니다**
+- self.output_dir(생성자에 전달된 output_path) 아래에 preprocessed_reviews_goodreads.csv 이름으로 저장합니다.
+- 인코딩은 utf-8-sig(엑셀에서 한글 깨짐 방지)로 저장합니다.
+- 저장된 행 수를 콘솔에 출력합니다.
+  
