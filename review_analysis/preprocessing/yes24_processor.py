@@ -76,7 +76,7 @@ class YES24Processor(BaseDataProcessor):
     def feature_engineering(self):
         df = self.df
 
-        # 파생변수 (5점 만점 기준 4점 이상 = 긍정)
+        # 파생변수: 감성 레이블 (팀 공통 변수, 5점 만점 기준 4점 이상 = 긍정)
         df["sentiment_label"] = (df["review_stars"] >= 4).astype(int)
 
         # 형태소 분석 -> 명사/용언 어근만 추출, 불용어 제거
