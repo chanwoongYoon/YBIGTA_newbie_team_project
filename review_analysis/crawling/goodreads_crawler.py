@@ -99,6 +99,8 @@ class GoodreadsCrawler(BaseCrawler):
             return None
 
         label = rating_el.get("aria-label", "")
+        if not isinstance(label, str):
+            label = ""
         match = re.search(r"([0-5](?:\.\d+)?)\s*(?:out of|/)?\s*5", label, re.I)
         if not match:
             match = re.search(r"rating\s*([0-5](?:\.\d+)?)", label, re.I)

@@ -2,6 +2,7 @@ import csv
 from datetime import datetime, timezone
 from pathlib import Path
 import time
+from typing import Any, Dict, List
 
 import requests
 from bs4 import BeautifulSoup
@@ -48,7 +49,7 @@ query getReviews($filters: BookReviewsFilterInput!, $pagination: PaginationInput
 
 MAX_REVIEWS = 500
 
-DEFAULT_PAYLOAD = {
+DEFAULT_PAYLOAD: Dict[str, Any] = {
     "operationName": "getReviews",
     "variables": {
         "filters": {
@@ -64,13 +65,13 @@ DEFAULT_PAYLOAD = {
 }
 
 
-def fetch_reviews(max_reviews: int = MAX_REVIEWS, delay_seconds: float = 1.0):
+def fetch_reviews(max_reviews: int = MAX_REVIEWS, delay_seconds: float = 1.0) -> List[Dict[str, Any]]:
     '''
-    Goodreads API 호출을 통해 리뷰를 수집하는 함수. 페이지네이션에 사용되는 nextPageToken을 
+    Goodreads API 호출을 통해 리뷰를 수집하는 함수. 페이지네이션에 사용되는 nextPageToken을
     활용하여 최대 max_reviews 개수만큼 리뷰를 수집한다.
     '''
-    reviews = []
-    payload = {
+    reviews: List[Dict[str, Any]] = []
+    payload: Dict[str, Any] = {
         "operationName": DEFAULT_PAYLOAD["operationName"],
         "variables": {
             "filters": DEFAULT_PAYLOAD["variables"]["filters"].copy(),
@@ -125,7 +126,7 @@ def fetch_reviews(max_reviews: int = MAX_REVIEWS, delay_seconds: float = 1.0):
     return reviews
 
 
-def save_reviews_csv(reviews, save_path: Path = DATABASE_DIR / "reviews_goodreads.csv"):
+def save_reviews_csv(reviews: List[Dict[str, Any]], save_path: Path = DATABASE_DIR / "reviews_goodreads.csv") -> None:
     '''수집한 리뷰를 csv파일로 저장한다.'''
     DATABASE_DIR.mkdir(parents=True, exist_ok=True)
     with open(save_path, "w", newline="", encoding="utf-8-sig") as f:
@@ -145,4 +146,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-print(f"Done! {len(reviews)} reviews saved to {save_path}")

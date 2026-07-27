@@ -1,7 +1,7 @@
 import time
 
 import pandas as pd
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator  # type: ignore[import-not-found]
 
 df = pd.read_csv("database/reviews_goodreads.csv")
 
@@ -25,6 +25,7 @@ def translate_with_retry(text: str, retries: int = 3, delay: float = 2.0) -> str
                 print("번역 실패, 원문 유지:", text[:50])
                 return text
             time.sleep(delay)
+    return text
 
 
 df["review"] = df["review"].fillna("").apply(translate_with_retry)
