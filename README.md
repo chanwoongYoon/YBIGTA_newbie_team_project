@@ -44,7 +44,7 @@ python main.py -o ../../database -c yes24
 |---|---|
 | 사이트 | 교보문고 - 불편한 편의점(벚꽃 에디션) (https://product.kyobobook.co.kr/detail/S000001803157) |
 | 대상 | 도서 <불편한 편의점(벚꽃 에디션)> Klover 리뷰 |
-| 수집 개수 | 500개 |
+| 수집 개수 | 800개 |
 | 저장 경로 | database/reviews_kyobo.csv |
 | 인코딩 | UTF-8 (BOM) |
 
@@ -58,7 +58,6 @@ python main.py -o ../../database -c yes24
 
 - 상품 상세페이지의 'Klover 리뷰' 위젯을 열고 페이지 번호 버튼을 순서대로 클릭해 페이지네이션(페이지당 10건)하여 수집
 - 별점은 채워진(fill=#4DAC27) 클로버 아이콘 개수로 계산 (아이콘 슬롯은 항상 4개 렌더링되므로 채워진 것만 필터링)
-- 별점/날짜/본문이 모두 존재하는 리뷰만 유효 데이터로 채택
 
 ### 실행 방법
 
@@ -70,6 +69,23 @@ python main.py -o ../../database -c kyobo
 ```
 
 Selenium + Chrome 드라이버가 필요하다.
+
+### 전처리 & Feature Engineering
+
+| 항목 | 내용 |
+|---|---|
+| 입력 | database/reviews_kyobo.csv |
+| 출력 | database/preprocessed_reviews_kyobo.csv |
+
+- 결측치 제거(`dropna`), 별점 4점 만점 → 5점 만점 스케일링, 범위 밖 값 clip(1~5)
+- 리뷰 본문 정제(줄바꿈/반복 특수문자/연속 공백 제거) 후 `kiwipiepy`로 형태소 분석 (명사·동사·형용사만 추출)
+- 파생변수: `sentiment_label`(별점 4점 이상 → 1) 등
+- `TfidfVectorizer`로 리뷰 텍스트 벡터화 (`max_features=1000`)
+
+```bash
+cd review_analysis/preprocessing
+python main.py -o ../../database -c reviews_kyobo
+```
 
 ## 리뷰 데이터 크롤링 — Goodreads (담당: 예린)
 
