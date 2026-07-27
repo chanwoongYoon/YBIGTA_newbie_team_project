@@ -28,6 +28,45 @@
 딥러닝 수업을 듣고 데이터에 관심을 가지게 되었으며, DL 모델 트레이닝, 파라미터 조정에 관심있습니다. DA와 DE 분야에도 흥미를 키워가고 있으며, 특히 시각화 툴이 흥미롭습니다. 
 이번 프로젝트에서는 해외 리뷰 플랫폼인 **Goodreads** 크롤러를 맡았습니다.
 
+## 🚀 실행 방법 모음
+
+```bash
+pip install -r requirements.txt
+```
+
+**Web (FastAPI 서버)**
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+**크롤링**
+
+```bash
+cd review_analysis/crawling
+python main.py -o ../../database -c kyobo      # 교보문고
+python main.py -o ../../database -c yes24      # YES24
+python goodreads_api.py                        # Goodreads
+```
+
+**EDA·FE (전처리)**
+
+```bash
+cd review_analysis/preprocessing
+python main.py --output_dir ../../database --all
+```
+
+각 과제별 세부 데이터 소개, 코드 동작 방식, EDA/전처리 설명은 아래 섹션에서 확인할 수 있습니다.
+
+## 🔐 GitHub 협업 (브랜치 보호 & PR 리뷰)
+
+| Branch protection 설정 | main 직접 push 거부 | PR 리뷰 및 merge |
+|---|---|---|
+| ![branch protection](github/branch_protection.png) | ![push rejected](github/push_rejected.png) | ![review and merged](github/review_and_merged.png) |
+
+- `main` 브랜치에 Require a pull request before merging + Do not allow bypassing 규칙 적용
+- 팀원들은 각자 브랜치에서 작업 후 PR을 생성하고, Reviewer가 코멘트를 남긴 뒤 merge
+
 ## 리뷰 데이터 크롤링 — YES24 (담당: 소연)
 
 ### 데이터 소개
