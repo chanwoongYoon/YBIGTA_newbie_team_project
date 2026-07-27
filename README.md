@@ -79,13 +79,24 @@ Selenium + Chrome 드라이버가 필요하다.
 
 - 결측치 제거(`dropna`), 별점 4점 만점 → 5점 만점 스케일링, 범위 밖 값 clip(1~5)
 - 리뷰 본문 정제(줄바꿈/반복 특수문자/연속 공백 제거) 후 `kiwipiepy`로 형태소 분석 (명사·동사·형용사만 추출)
-- 파생변수: `sentiment_label`(별점 4점 이상 → 1) 등
+- 파생변수: `sentiment_label`(별점 4점 이상 → 1), `review_length`(형태소 분석 전 원본 리뷰 글자 수) 등
 - `TfidfVectorizer`로 리뷰 텍스트 벡터화 (`max_features=1000`)
 
 ```bash
 cd review_analysis/preprocessing
 python main.py -o ../../database -c reviews_kyobo
 ```
+
+### 시각화
+
+`preprocessed_reviews_kyobo.csv`를 Tableau로 시각화한 결과 (이미지: `review_analysis/plots/`).
+
+| 긍정/부정 비율 | 리뷰 길이 분포 |
+|---|---|
+| ![긍정 부정 비율](review_analysis/plots/kyobo_sentiment.png) | ![리뷰 길이 분포](review_analysis/plots/kyobo_review_length.png) |
+
+- 긍정(별점 4점 이상) 비율이 94.1%로 압도적으로 높음
+- 리뷰 길이는 대부분 10~30자 사이에 몰려있고, 짧은 한줄평 위주. 일부 100자 이상의 장문 리뷰도 존재하는 롱테일 분포
 
 ## 리뷰 데이터 크롤링 — Goodreads (담당: 예린)
 
