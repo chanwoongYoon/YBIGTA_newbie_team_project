@@ -77,7 +77,7 @@ Selenium + Chrome 드라이버가 필요하다.
 
 | 항목 | 내용 |
 |---|---|
-| 사이트 | Goodreads - 불편한 편의점 ([https://www.yes24.com/product/goods/99308021](https://www.goodreads.com/book/show/58481813/reviews?reviewFilters=eyJhZnRlciI6Ik1UUXdNU3d4TnpNM01ESTFNVGd5TlRZNSJ9)) |
+| 사이트 | Goodreads - 불편한 편의점 ([https://www.goodreads.com/book/show/58481813/reviews?reviewFilters=eyJhZnRlciI6Ik1UUXdNU3d4TnpNM01ESTFNVGd5TlRZNSJ9]) |
 | 대상 | 도서 <불편한 편의점> 리뷰 |
 | 수집 개수 | 500개 |
 | 저장 경로 | database/reviews_goodreads.csv |
