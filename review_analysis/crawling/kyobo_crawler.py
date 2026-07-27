@@ -40,9 +40,9 @@ class KyoboCrawler(BaseCrawler):
     SITE_NAME = "kyobo"
     SALE_CMDT_ID = "S000001803157"
     REVIEWS_PER_PAGE = 10
-    MAX_PAGES = 500
+    MAX_PAGES = 800
 
-    def __init__(self, output_dir: str, target_count: int = 500):
+    def __init__(self, output_dir: str, target_count: int = 800):
         """
         Args:
             output_dir: 크롤링 결과 csv를 저장할 디렉토리 경로 (예: "database")
@@ -177,31 +177,25 @@ class KyoboCrawler(BaseCrawler):
             self.driver.quit()
             return []
 
-        def is_valid(r: Dict[str, Any]) -> bool:
-            return r["stars"] is not None and r["date"] and r["review"]
-
         collected: List[Dict[str, Any]] = []
         collected.extend(self._parse_current_page())
-        valid_count = sum(1 for r in collected if is_valid(r))
-        logger.info(f"[page 1] 누적 수집: {len(collected)}개 (유효 {valid_count}개)")
+        logger.info(f"[page 1] 누적 수집: {len(collected)}개")
 
         page = 1
-        while valid_count < self.target_count and page < self.MAX_PAGES:
+        while len(collected) < self.target_count and page < self.MAX_PAGES:
             page += 1
             if not self._click_page(page):
                 logger.info(f"[page {page}] 버튼 없음 — 더 이상 페이지 없음, 수집 종료")
                 break
             collected.extend(self._parse_current_page())
-            valid_count = sum(1 for r in collected if is_valid(r))
-            logger.info(f"[page {page}] 누적 수집: {len(collected)}개 (유효 {valid_count}개)")
+            logger.info(f"[page {page}] 누적 수집: {len(collected)}개")
         else:
             if page >= self.MAX_PAGES:
                 logger.warning("최대 페이지 한도 도달 — 크롤링 종료")
 
         self.driver.quit()
 
-        valid = [r for r in collected if is_valid(r)]
-        self.results = valid[: self.target_count]
+        self.results = collected[: self.target_count]
 
         if len(self.results) < self.target_count:
             logger.warning(
