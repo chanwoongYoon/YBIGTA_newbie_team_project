@@ -15,16 +15,15 @@ STOPWORDS = {
 
 
 class YES24Processor(BaseDataProcessor):
-    def __init__(self, input_path: str, output_dir: str):
-        super().__init__(input_path, output_dir)
-        self.df: pd.DataFrame = pd.DataFrame()
+    def __init__(self, input_collection, output_collection):
+        super().__init__(input_collection, output_collection)
         self.kiwi = Kiwi()
 
     # ------------------------------------------------------------------
     # 1. 전처리
     # ------------------------------------------------------------------
     def preprocess(self):
-        df = pd.read_csv(self.input_path)
+        df = self.df.copy()
 
         # 팀 컨벤션에 맞춰 컬럼명 통일
         df = df.rename(columns={
@@ -112,12 +111,3 @@ class YES24Processor(BaseDataProcessor):
         self.df = df
         return self.df
 
-    # ------------------------------------------------------------------
-    # 3. 저장
-    # ------------------------------------------------------------------
-    def save_to_database(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        out_path = os.path.join(self.output_dir, "preprocessed_reviews_yes24.csv")
-        self.df.to_csv(out_path, index=False, encoding="utf-8-sig")
-        print(f"저장 완료: {out_path} ({len(self.df)}행)")
-        return out_path

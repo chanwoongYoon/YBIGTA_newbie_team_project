@@ -12,22 +12,12 @@ column_name = {
 }
 
 class KyoboProcessor(BaseDataProcessor):
-    def __init__(self, input_path: str, output_path: str):
-        super().__init__(input_path, output_path)
+    def __init__(self, input_collection, output_collection):
+        super().__init__(input_collection, output_collection)
         self.kiwi = Kiwi()
 
-    def load(self):
-        try:
-            df = pd.read_csv(self.input_path, encoding='utf-8-sig')
-        except UnicodeDecodeError:
-            df = pd.read_csv(self.input_path, encoding='cp949')
-        print(f"[{Path(self.input_path).stem}] shape={df.shape}")
-        print("컬럼:", df.columns.tolist())
-        return df
-
-
     def preprocess(self):
-        df = self.load()
+        df = self.df.copy()
 
         # 별점 스케일링
         df[column_name["review_stars"]] = df[column_name["review_stars"]] * (5/4)
@@ -89,12 +79,6 @@ class KyoboProcessor(BaseDataProcessor):
 
         self.df = df
         return df
-
-    def save_to_database(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        save_path = os.path.join(self.output_dir, "preprocessed_reviews_kyobo.csv")
-        self.df.to_csv(save_path, index=False, encoding="utf-8-sig")
-        print(f"저장 완료: {save_path} (shape={self.df.shape})")
 
     def view_preprocessing(self):
         print(self.df["sentiment_label"].describe())
