@@ -8,6 +8,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from review_analysis.preprocessing.base_processor import BaseDataProcessor
 
 class GoodreadsProcessor(BaseDataProcessor):
+    def __init__(self, input_collection, output_collection):
+        self.input_collection = input_collection
+        self.output_collection = output_collection
+        self.df = pd.DataFrame(list(input_collection.find()))
+        if "_id" in self.df.columns:
+            self.df = self.df.drop(columns=["_id"])
+
     def preprocess(self):
         '''결측치 확인, 이상치 처리, 텍스트 정리를 하는 전처리 함수입니다.'''
         #1. 결측치 확인
@@ -62,5 +69,14 @@ class GoodreadsProcessor(BaseDataProcessor):
             tfidf_df.reset_index(drop=True)],
             axis=1
         )
+
+    def save_to_database(self):
+        '''전처리 완료된 데이터프레임을 MongoDB의 output_collection에 저장하는 함수입니다.
+        재실행 시 결과가 누적되지 않도록 기존 데이터는 지우고 새로 저장합니다.'''
+        self.output_collection.delete_many({})
+        records = self.df.to_dict("records")
+        if records:
+            self.output_collection.insert_many(records)
+        return self.output_collection.name
 
 
