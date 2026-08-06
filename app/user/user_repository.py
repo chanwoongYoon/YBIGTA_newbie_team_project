@@ -1,33 +1,42 @@
-import json
-
-from typing import Dict, Optional
+from typing import Optional
 
 from app.user.user_schema import User
 from app.config import USER_DATA
 
-class UserRepository:
-    def __init__(self) -> None:
-        self.users: Dict[str, dict] = self._load_users()
+from sqlalchemy import Column, String
+from sqlalchemy.orm import declarative_base, Session
 
-    def _load_users(self) -> Dict[str, Dict]:
-        try:
-            with open(USER_DATA, "r") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            raise ValueError("File not found")
+BASE = declarative_base()
+
+class UserRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
 
     def get_user_by_email(self, email: str) -> Optional[User]:
-        user = self.users.get(email)
-        return User(**user) if user else None
+        user = self.db.query(UserORM).filter(UserORM.email == email).first()
+        return User(email=user.email, password=user.password, username=user.username) if user else None
 
     def save_user(self, user: User) -> User: 
-        self.users[user.email] = user.model_dump()
-        with open(USER_DATA, "w") as f:
-            json.dump(self.users, f)
+        existing = self.db.query(UserORM).filter(UserORM.email == user.email).first()
+
+        if existing:
+            existing.password = user.password
+            existing.username = user.username
+        else:
+            new_user = UserORM(email=user.email, password=user.password, username=user.username)
+            self.db.add(new_user)
+
+        self.db.commit()
+        return user
+            
+    def delete_user(self, user: User) -> User:
+        del_user = self.db.query(UserORM).filter(UserORM.email == user.email).first()
+        self.db.delete(del_user)
+        self.db.commit()
         return user
 
-    def delete_user(self, user: User) -> User:
-        del self.users[user.email]
-        with open(USER_DATA, "w") as f:
-            json.dump(self.users, f)
-        return user
+class UserORM(BASE):
+    __tablename__ = "users"
+    email = Column(String(255), primary_key=True)
+    password = Column(String(255), nullable=False)
+    username = Column(String(255), nullable=False)
