@@ -8,9 +8,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from review_analysis.preprocessing.base_processor import BaseDataProcessor
 
 class GoodreadsProcessor(BaseDataProcessor):
-    def __init__(self, input_path: str, output_path: str):
-        super().__init__(input_path, output_path)
-        self.df = pd.read_csv(input_path, encoding="utf-8-sig")
+    def __init__(self, input_collection, output_collection):
+        self.input_collection = input_collection
+        self.output_collection = output_collection
+        self.df = pd.DataFrame(list(input_collection.find()))
+        if "_id" in self.df.columns:
+            self.df = self.df.drop(columns=["_id"])
 
     def preprocess(self):
         '''결측치 확인, 이상치 처리, 텍스트 정리를 하는 전처리 함수입니다.'''
@@ -67,21 +70,13 @@ class GoodreadsProcessor(BaseDataProcessor):
             axis=1
         )
 
-
     def save_to_database(self):
-        '''전처리 완료된 데이터프레임을 database 디렉토리에 
-        csv파일로 저장하는 함수입니다.'''
-        
-        os.makedirs(self.output_dir, exist_ok=True)
+        '''전처리 완료된 데이터프레임을 MongoDB의 output_collection에 저장하는 함수입니다.
+        재실행 시 결과가 누적되지 않도록 기존 데이터는 지우고 새로 저장합니다.'''
+        self.output_collection.delete_many({})
+        records = self.df.to_dict("records")
+        if records:
+            self.output_collection.insert_many(records)
+        return self.output_collection.name
 
-        out_path = os.path.join(
-            self.output_dir, 
-            "preprocessed_reviews_goodreads.csv")
-        
-        self.df.to_csv(out_path, 
-                       index=False, 
-                       encoding="utf-8-sig"
-                       )
-        
-        print(f"저장 완료: {out_path} ({len(self.df)}행)")
-        return out_path
+

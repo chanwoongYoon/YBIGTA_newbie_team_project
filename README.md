@@ -67,6 +67,74 @@ python main.py --output_dir ../../database --all
 - `main` 브랜치에 Require a pull request before merging + Do not allow bypassing 규칙 적용
 - 팀원들은 각자 브랜치에서 작업 후 PR을 생성하고, Reviewer가 코멘트를 남긴 뒤 merge
 
+## 🗄️ DB 연동 — MySQL & MongoDB (담당: 찬웅)
+
+유저 정보는 **MySQL**에, 크롤링한 리뷰 원본/전처리 데이터는 **MongoDB**에 저장하도록 구성했습니다.
+
+### 0. 환경 변수 (`.env`)
+
+프로젝트 최상위 디렉토리에 아래 값들이 필요합니다 (`.gitignore`에 포함되어 커밋되지 않습니다).
+
+```
+MYSQL_USER=...
+MYSQL_PASSWORD=...
+MYSQL_HOST=...
+MYSQL_PORT=3306
+MYSQL_DATABASE=ybigta
+
+MONGO_URL=mongodb://localhost:27017/ybigta
+```
+
+### 1. 유저 정보 MySQL CRUD
+
+`database/mysql_connection.py`에서 `.env`를 읽어 `DB_URL`을 구성하고, SQLAlchemy `engine`/`SessionLocal`을 생성합니다.
+
+| 항목 | 내용 |
+|---|---|
+| ORM | SQLAlchemy (`declarative_base`) |
+| 드라이버 | PyMySQL |
+| 테이블명 | `users` (email PK, password, username 모두 NOT NULL) |
+
+**`app/user/user_repository.py`**
+- `UserRepository`가 생성자에서 `db: Session`을 주입받는 구조로 변경 (기존 JSON 파일 기반 → DB 세션 기반)
+- `UserORM` 모델 클래스로 `users` 테이블 매핑
+- `get_user_by_email`: `session.query(UserORM).filter(...)`로 조회 후 pydantic `User`로 변환
+- `save_user`: 이메일 존재 여부를 조회해 있으면 UPDATE, 없으면 INSERT하는 upsert 로직
+- `delete_user`: 조회 후 `session.delete()` + `commit()`
+
+**`app/dependencies.py`**
+- `get_db()`: 요청마다 `SessionLocal()`로 세션을 만들고 `yield` 후 `finally`에서 `close()`하는 FastAPI 의존성 함수 추가
+- `get_user_repository`가 `Depends(get_db)`로 세션을 주입받아 `UserRepository`를 생성하도록 변경
+
+**테스트**
+```bash
+pytest test/test_user_repository.py -v
+```
+SQLite 인메모리 DB 기준 4개 테스트(`save`, `get`, `update`, `delete`) 모두 통과.
+
+### 2. 리뷰 데이터 MongoDB 전처리 자동화
+
+크롤링한 원본 CSV는 MongoDB Compass로 `reviews_{site_name}` 컬렉션에 적재했습니다 (`goodreads`, `kyobo`, `yes24`).
+
+**`review_analysis/preprocessing/base_processor.py`**
+- 기존 CSV 경로 기반(`input_path`, `output_dir`) → MongoDB 컬렉션 기반으로 변경
+- 생성자에서 `input_collection.find()` 결과를 바로 `pandas.DataFrame`으로 변환해 `self.df`에 저장
+- `save_to_database()`를 공통 로직으로 구현: 재실행 시 결과가 누적되지 않도록 `output_collection`을 비운 뒤 `insert_many`로 저장
+- ⚠️ 세 사이트가 완전히 동일한 Mongo 읽기/쓰기 로직을 반복하는 걸 피하려고 부모 클래스를 수정했습니다. 과제 PDF의 파일 트리 주석엔 별도 표시가 없어, 운영진 확인 후 필요시 각 프로세서 클래스에 로직을 개별로 넣는 방식으로 되돌릴 수 있습니다.
+- `goodreads_processor.py`, `kyobo_processor.py`, `yes24_processor.py`는 CSV 읽기/쓰기 로직만 제거하고, 기존 `preprocess`/`feature_engineering` 로직은 그대로 유지
+
+**`app/review/review_router.py`** (신규)
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| POST | `/review/preprocess/{site_name}` | `reviews_{site_name}` 컬렉션을 조회 → 해당 사이트 전처리 클래스 실행 → `preprocessed_reviews_{site_name}` 컬렉션에 저장 |
+
+`site_name`은 `goodreads` / `kyobo` / `yes24`를 지원하며, 등록되지 않은 값이면 404를 반환합니다.
+
+```bash
+curl -X POST http://localhost:8000/review/preprocess/goodreads
+```
+
 ## 리뷰 데이터 크롤링 — YES24 (담당: 소연)
 
 ### 데이터 소개
