@@ -7,7 +7,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_URL = f'mysql+pymysql://{user}:{passwd}@{host}:{port}/{db}?charset=utf8'
+MYSQL_USER=os.getenv("MYSQL_USER")
+MYSQL_PASSWORD=os.getenv("MYSQL_PASSWORD")
+MYSQL_HOST=os.getenv("MYSQL_HOST")
+MYSQL_PORT=os.getenv("MYSQL_PORT")
+MYSQL_DATABASE=os.getenv("MYSQL_DATABASE")
+
+DB_URL = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?charset=utf8'
 
 engine = create_engine(DB_URL, echo=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

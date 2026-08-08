@@ -12,22 +12,16 @@ column_name = {
 }
 
 class KyoboProcessor(BaseDataProcessor):
-    def __init__(self, input_path: str, output_path: str):
-        super().__init__(input_path, output_path)
+    def __init__(self, input_collection, output_collection):
+        self.input_collection = input_collection
+        self.output_collection = output_collection
+        self.df = pd.DataFrame(list(input_collection.find()))
+        if "_id" in self.df.columns:
+            self.df = self.df.drop(columns=["_id"])
         self.kiwi = Kiwi()
 
-    def load(self):
-        try:
-            df = pd.read_csv(self.input_path, encoding='utf-8-sig')
-        except UnicodeDecodeError:
-            df = pd.read_csv(self.input_path, encoding='cp949')
-        print(f"[{Path(self.input_path).stem}] shape={df.shape}")
-        print("컬럼:", df.columns.tolist())
-        return df
-
-
     def preprocess(self):
-        df = self.load()
+        df = self.df.copy()
 
         # 별점 스케일링
         df[column_name["review_stars"]] = df[column_name["review_stars"]] * (5/4)
@@ -90,12 +84,6 @@ class KyoboProcessor(BaseDataProcessor):
         self.df = df
         return df
 
-    def save_to_database(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        save_path = os.path.join(self.output_dir, "preprocessed_reviews_kyobo.csv")
-        self.df.to_csv(save_path, index=False, encoding="utf-8-sig")
-        print(f"저장 완료: {save_path} (shape={self.df.shape})")
-
     def view_preprocessing(self):
         print(self.df["sentiment_label"].describe())
         print(self.df.shape)
@@ -104,3 +92,12 @@ class KyoboProcessor(BaseDataProcessor):
         print(self.df.sample(20))
         print(f'텍스트 벡터화 잘 되었나 확인 : {self.tfidf_matrix.shape}')
         print(f'실제로 어떤 단어들이 들어갔나 확인 : {self.vectorizer.get_feature_names_out()}')
+
+    def save_to_database(self):
+        '''전처리 완료된 데이터프레임을 MongoDB의 output_collection에 저장하는 함수입니다.
+        재실행 시 결과가 누적되지 않도록 기존 데이터는 지우고 새로 저장합니다.'''
+        self.output_collection.delete_many({})
+        records = self.df.to_dict("records")
+        if records:
+            self.output_collection.insert_many(records)
+        return self.output_collection.name
