@@ -1,0 +1,32 @@
+# env / secrets
+.env
+.env.*
+
+# git
+.git
+.github
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+
+# tests
+test/
+
+# docs / large data not needed at runtime
+README.md
+aws/
+database/*.csv
+database/debug_page.html
+database/debug_screenshot.png

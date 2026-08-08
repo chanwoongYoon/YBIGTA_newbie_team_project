@@ -67,6 +67,46 @@ python main.py --output_dir ../../database --all
 - `main` 브랜치에 Require a pull request before merging + Do not allow bypassing 규칙 적용
 - 팀원들은 각자 브랜치에서 작업 후 PR을 생성하고, Reviewer가 코멘트를 남긴 뒤 merge
 
+## 🐳 Docker & 배포 (담당: 찬웅)
+
+### Docker Hub
+
+- 이미지 주소: `<DOCKERHUB_USERNAME>/ybigta-newbie-project` <!-- TODO: 실제 Docker Hub 주소로 교체 -->
+- Docker Hub: https://hub.docker.com/r/<DOCKERHUB_USERNAME>/ybigta-newbie-project <!-- TODO -->
+
+```bash
+# 이미지 빌드
+docker build -t <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest .
+
+# 로컬 실행
+docker run -d --name ybigta-app --env-file .env -p 8000:8000 <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest
+
+# Docker Hub push
+docker login
+docker push <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest
+```
+
+- `.env` 파일에는 MySQL/MongoDB 접속 정보 등 민감한 값이 들어가므로, `.dockerignore`에 등록하여 이미지에는 포함되지 않도록 처리했습니다.
+
+### GitHub Actions (CI/CD)
+
+`.github/workflows/deploy.yaml`에서 push 시 아래 두 job이 순서대로 실행됩니다.
+
+1. **Build and Push Docker Image**: 이미지를 빌드해 Docker Hub로 push
+2. **Deploy to EC2**: EC2 인스턴스에 SSH로 접속해 최신 이미지를 pull받아 컨테이너를 재시작
+
+| 필요한 GitHub Secret | 설명 |
+|---|---|
+| `DOCKERHUB_USERNAME` | Docker Hub 계정 아이디 |
+| `DOCKERHUB_TOKEN` | Docker Hub Access Token |
+| `EC2_HOST` | EC2 퍼블릭 IP |
+| `EC2_USERNAME` | EC2 접속 계정 (예: `ubuntu`) |
+| `EC2_SSH_KEY` | EC2 접속용 PEM 키 내용 |
+
+실행 결과 캡쳐:
+
+![github action](aws/github_action.png) <!-- TODO: Actions 실행 성공 화면 캡쳐 추가 -->
+
 ## 리뷰 데이터 크롤링 — YES24 (담당: 소연)
 
 ### 데이터 소개
