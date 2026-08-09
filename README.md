@@ -526,3 +526,112 @@ python review_analysis/crawling/goodreads_api.py
 - Goodreads는 상반기 이후 점진적으로 감소하는 전형적인 라이프사이클 패턴을 보였습니다.
 - YES24는 3월, 7월, 12월에 리뷰가 증가하는 계절성이 나타났습니다.
 - 교보문고는 2월에 리뷰가 가장 많이 생성된 이후 빠르게 감소하였습니다. 초기 판매 효과가 가장 강하게 나타난 플랫폼으로 해석할 수 있습니다. 
+
+
+## AWS 인프라 구성
+
+| 구성 요소 | 서비스 | 설정 |
+|---|---|---|
+| 애플리케이션 서버 | EC2 (t3.micro, Amazon Linux 2023) | 탄력적 IP 연결, Docker 실행 |
+| 관계형 DB | RDS MySQL 8.4 (db.t3.micro) | 프라이빗 서브넷, 퍼블릭 액세스 차단 |
+| 문서형 DB | MongoDB Atlas (M0) | IP Access List로 EC2만 허용 |
+
+리전은 모두 서울(ap-northeast-2)로 통일하여 EC2와 RDS가 동일 VPC(vpc-072f4251cbe7a5068) 내에 위치하도록 구성했습니다.
+
+## Docker Hub
+
+https://hub.docker.com/r/chanwoongyoon/ybigta-newbie-project
+
+## API 실행 결과
+
+배포된 애플리케이션은 Application Load Balancer를 통해 접근합니다.
+
+### 회원가입
+
+![register](aws/register.png)
+
+### 로그인
+
+![login](aws/login.png)
+
+### 비밀번호 변경
+
+![update-password](aws/update-password.png)
+
+### 회원 탈퇴
+
+![delete](aws/delete.png)
+
+### 리뷰 전처리
+
+MongoDB에 적재된 원본 리뷰를 조회하여 전처리한 뒤 다시 MongoDB에 저장합니다.
+
+![preprocess](aws/preprocess.png)
+
+### 헬스 체크
+
+로드 밸런서의 타겟 그룹 상태 확인에 사용됩니다.
+
+![health](aws/health.png)
+
+
+## RDS 보안 설정: 퍼블릭 액세스 차단과 프라이빗 서브넷
+
+### 1. 퍼블릭 액세스 비활성화
+
+RDS 인스턴스 생성 시 퍼블릭 액세스를 비활성화하여 퍼블릭 IP를 할당받지 않도록 했습니다. 인터넷 구간에서 DB로 직접 접근하는 경로가 존재하지 않으며, 동일 VPC 내부 리소스만 연결할 수 있습니다.
+
+### 2. 프라이빗 서브넷 배치
+
+퍼블릭 액세스를 껐더라도 인스턴스가 퍼블릭 서브넷에 있다면, 해당 서브넷의 라우팅 테이블에는 인터넷 게이트웨이(IGW) 경로가 존재합니다. 기본 VPC의 서브넷은 모두 이 상태입니다. 네트워크 계층에서부터 외부 경로를 차단하기 위해 별도의 프라이빗 서브넷을 구성했습니다.
+
+- `ybigta-private-rt` 라우팅 테이블 생성 — IGW 경로 없이 `172.31.0.0/16 → local` 만 보유
+- `subnet-00edb02c8c8222049`(ap-northeast-2a), `subnet-0ccadfd160862a03c`(ap-northeast-2b)를 이 라우팅 테이블에 연결
+- 두 서브넷으로 `ybigta-private-subnet-group`을 구성하여 RDS 배치
+
+EC2가 사용하는 서브넷(ap-northeast-2c)은 SSH 접속과 Docker 이미지 pull이 필요하므로 퍼블릭으로 유지했습니다.
+
+### 3. 보안 그룹 분리와 그룹 참조
+
+보안 그룹을 역할별로 분리하고, RDS의 인바운드 소스로 IP 대역이 아닌 **EC2 보안 그룹 자체를 참조**하도록 설정했습니다.
+
+- `ybigta-ec2-sg` (EC2): SSH(22), 애플리케이션(8000) 인바운드 허용
+- `ybigta-rds-sg` (RDS): MySQL(3306) 인바운드를 소스 `ybigta-ec2-sg`로 제한
+
+CIDR 대신 그룹 ID를 참조하면 EC2의 IP가 바뀌거나 인스턴스가 추가되어도 규칙을 수정할 필요가 없고, 해당 보안 그룹에 속한 리소스만 DB에 접근할 수 있어 접근 주체가 명시적으로 제한됩니다.
+
+MongoDB Atlas 역시 IP Access List에 EC2의 탄력적 IP만 등록하여 허용된 출처 외에는 클러스터에 연결할 수 없도록 했습니다.
+
+![RDS 퍼블릭 액세스 차단 및 프라이빗 서브넷](aws/rds_public_access.png)
+![프라이빗 라우팅 테이블](aws/private_route_table.png)
+![RDS 보안 그룹 인바운드 규칙](aws/rds_security_group.png)
+
+## 트러블슈팅
+
+### RDS 생성 실패 — MySQL 8.0 표준 지원 종료
+
+`mysql-8.0.46 reached RDS end of standard support on Jul 31, 2026` 오류로 생성이 거부되었습니다. AWS는 엔진 버전별로 표준 지원 종료일을 두고, 이후에는 유료인 Extended Support 구독을 요구합니다. 추가 과금을 피하기 위해 표준 지원 기간이 남아 있는 MySQL 8.4로 전환했습니다. pymysql은 8.4에서도 `caching_sha2_password` 인증을 동일하게 지원하므로 애플리케이션 코드 수정은 필요하지 않았습니다.
+
+### 보안 그룹 규칙의 소스 유형 변경 불가
+
+기존 CIDR 기반 인바운드 규칙의 소스를 보안 그룹 참조로 변경하려 하자 `기존 IPv4 CIDR 규칙에 참조된 그룹 ID를 지정할 수 없습니다` 오류가 발생했습니다. AWS는 이미 생성된 규칙의 소스 *유형* 자체를 변경하는 것을 허용하지 않습니다. 규칙을 삭제한 뒤 보안 그룹 참조로 새로 생성하여 해결했습니다.
+
+### DB 서브넷 그룹은 생성 후 변경 불가
+
+프라이빗 서브넷으로 이전하기 위해 기존 인스턴스의 서브넷 그룹을 변경하려 했으나 `You cannot move DB instance to subnet group ... in the same VPC` 오류가 발생했습니다. 서브넷 그룹은 인스턴스의 네트워크 배치를 결정하는 생성 시점 속성에 가까워, 동일 VPC 내 다른 그룹으로는 이동할 수 없습니다. 결국 인스턴스를 삭제하고 프라이빗 서브넷 그룹을 지정하여 재생성했습니다. **네트워크 구성은 리소스를 만들기 전에 먼저 설계해야 한다**는 점을 확인한 사례입니다.
+
+### MongoDB URI에 데이터베이스 이름 누락
+
+`mongodb_connection.py`가 `mongo_client.get_database()`를 인자 없이 호출하는 구조여서, 연결 문자열 경로에 DB 이름이 없으면 기본 DB를 결정하지 못해 `ConfigurationError`가 발생합니다. Atlas가 제공하는 기본 문자열(`.../?retryWrites=...`)에 DB 이름을 명시하여 `.../ybigta?retryWrites=...` 형태로 수정했습니다.
+
+### DB 비밀번호의 특수문자와 URL 파싱
+
+`mysql_connection.py`는 f-string으로 `mysql+pymysql://{user}:{pw}@{host}:{port}/{db}` 형태의 URL을 조립하며 비밀번호를 URL 인코딩하지 않습니다. 비밀번호에 `@`나 `:`가 포함되면 호스트·포트 구분자와 충돌해 파싱이 깨지므로 영문과 숫자로만 구성했습니다. 근본적으로는 `urllib.parse.quote_plus()`로 인코딩하는 것이 안전합니다.
+
+### Docker 그룹 권한의 지연 적용
+
+`usermod -aG docker ec2-user` 실행 후에도 `permission denied while trying to connect to the Docker daemon socket` 오류가 지속되었습니다. 리눅스의 그룹 소속 정보는 로그인 시점에 프로세스에 부여되므로 기존 세션에는 반영되지 않습니다. 재접속 후 정상 동작을 확인했습니다.
+
+### 컨테이너 이미지에서 제외된 CSV
+
+preprocess API 호출 시 `No raw data found in reviews_yes24` 404가 발생했습니다. `.dockerignore`에 `database/*.csv`가 포함되어 크롤링 원본이 이미지에 들어가지 않았기 때문입니다. 이미지 용량 관점에서는 올바른 설정이므로, `docker cp`로 실행 중인 컨테이너에 CSV를 전달한 뒤 적재 스크립트를 실행해 Atlas에 원본 데이터를 넣었습니다. 데이터는 DB에 남고 컨테이너는 언제든 교체 가능하다는 컨테이너 설계 원칙을 확인한 사례입니다.
