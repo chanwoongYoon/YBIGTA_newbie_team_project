@@ -57,6 +57,7 @@ python main.py --output_dir ../../database --all
 ```
 
 각 과제별 세부 데이터 소개, 코드 동작 방식, EDA/전처리 설명은 아래 섹션에서 확인할 수 있습니다.
+# Docker과제 관련 어려웠던 점 (멋져요 과제+ 과제 전반)은 가장 하단에서 확인할 수 있습니다. 
 
 ## 🔐 GitHub 협업 (브랜치 보호 & PR 리뷰)
 
@@ -66,63 +67,6 @@ python main.py --output_dir ../../database --all
 
 - `main` 브랜치에 Require a pull request before merging + Do not allow bypassing 규칙 적용
 - 팀원들은 각자 브랜치에서 작업 후 PR을 생성하고, Reviewer가 코멘트를 남긴 뒤 merge
-
-## 🐳 Docker & 배포 (담당: 찬웅)
-
-### Docker Hub
-
-- 이미지 주소: `<DOCKERHUB_USERNAME>/ybigta-newbie-project` <!-- TODO: 실제 Docker Hub 주소로 교체 -->
-- Docker Hub: https://hub.docker.com/r/<DOCKERHUB_USERNAME>/ybigta-newbie-project <!-- TODO -->
-
-```bash
-# 이미지 빌드
-docker build -t <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest .
-
-# 로컬 실행
-docker run -d --name ybigta-app --env-file .env -p 8000:8000 <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest
-
-# Docker Hub push
-docker login
-docker push <DOCKERHUB_USERNAME>/ybigta-newbie-project:latest
-```
-
-- `.env` 파일에는 MySQL/MongoDB 접속 정보 등 민감한 값이 들어가므로, `.dockerignore`에 등록하여 이미지에는 포함되지 않도록 처리했습니다.
-
-### GitHub Actions (예린담당)
-
-`.github/workflows/deploy.yaml`에서 push 시 아래 두 job이 순서대로 실행됩니다.
-
-1. **Build and Push Docker Image**: 이미지를 빌드해 Docker Hub로 push
-2. **Deploy to EC2**: EC2 인스턴스에 SSH로 접속해 최신 이미지를 pull받아 컨테이너를 재시작
-
-| 필요한 GitHub Secret | 설명 |
-|---|---|
-| `DOCKERHUB_USERNAME` | Docker Hub 계정 아이디 |
-| `DOCKERHUB_TOKEN` | Docker Hub Access Token |
-| `EC2_HOST` | EC2 퍼블릭 IP |
-| `EC2_USERNAME` | EC2 접속 계정 (예: `ubuntu`) |
-| `EC2_SSH_KEY` | EC2 접속용 PEM 키 내용 |
-
-실행 결과 캡쳐:
-
-![github action](aws/github_action.png) <!-- TODO: Actions 실행 성공 화면 캡쳐 추가 -->
-## 🗄️ DB 연동 — MySQL & MongoDB (담당: 찬웅)
-
-유저 정보는 **MySQL**에, 크롤링한 리뷰 원본/전처리 데이터는 **MongoDB**에 저장하도록 구성했습니다.
-
-### 0. 환경 변수 (`.env`)
-
-프로젝트 최상위 디렉토리에 아래 값들이 필요합니다 (`.gitignore`에 포함되어 커밋되지 않습니다).
-
-```
-MYSQL_USER=...
-MYSQL_PASSWORD=...
-MYSQL_HOST=...
-MYSQL_PORT=3306
-MYSQL_DATABASE=ybigta
-
-MONGO_URL=mongodb://localhost:27017/ybigta
-```
 
 ### 1. 유저 정보 MySQL CRUD
 
@@ -635,3 +579,61 @@ MongoDB Atlas 역시 IP Access List에 EC2의 탄력적 IP만 등록하여 허�
 ### 컨테이너 이미지에서 제외된 CSV
 
 preprocess API 호출 시 `No raw data found in reviews_yes24` 404가 발생했습니다. `.dockerignore`에 `database/*.csv`가 포함되어 크롤링 원본이 이미지에 들어가지 않았기 때문입니다. 이미지 용량 관점에서는 올바른 설정이므로, `docker cp`로 실행 중인 컨테이너에 CSV를 전달한 뒤 적재 스크립트를 실행해 Atlas에 원본 데이터를 넣었습니다. 데이터는 DB에 남고 컨테이너는 언제든 교체 가능하다는 컨테이너 설계 원칙을 확인한 사례입니다.
+
+
+사용자가 파일 수정 대신 텍스트로 달라고 해서, 아래 내용을 복사해서 README에 붙여넣으면 돼.
+
+---
+
+## 🛠️ 어려웠던 점 및 배운 점
+
+### Docker + Github Actions
+
+**1. Docker Desktop 엔진이 500 Internal Server Error를 반환하는 문제**
+
+로컬에서 `docker build`를 실행했더니 아래처럼 엔진 자체에 접속이 안 되는 에러가 발생했습니다.
+
+```
+ERROR: request returned 500 Internal Server Error for API route and version
+http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/_ping, ...
+```
+
+Windows용 Docker Desktop은 `docker` CLI(클라이언트)와 실제 컨테이너를 실행하는 엔진(BuildKit/containerd, WSL2 기반 Linux VM)이 분리되어 있습니다. `docker info`로 확인해보니 `Client` 정보는 정상적으로 뜨는데 `Server` 파트에서만 에러가 나는 걸 보고, CLI는 살아있지만 백엔드(리눅스 VM) 쪽 프로세스만 죽어있는 상태라는 걸 알게 됐습니다. Docker Desktop을 완전히 재시작해서 백엔드 프로세스를 새로 띄우니 해결됐습니다. 이를 통해 "docker 명령이 안 먹힌다"는 문제의 상당수는 CLI가 아니라 이 VM/백엔드 프로세스가 죽었거나 응답이 없는 경우임을 배웠습니다. 앞으로 같은 문제를 마주쳤을 때, `docker info`로 Client/Server 응답을 나눠 보며 어느 쪽이 문제인지 빠르게 좁혀 보려고 합니다.
+
+**2. `pip install` 중 대용량 패키지 다운로드 타임아웃**
+
+`requirements.txt`에는 `scipy`, `scikit-learn`, `pandas`, `mypy` 등 용량이 큰(10~35MB) wheel 파일이 포함되어 있는데, 이미지 빌드 중 다음과 같은 에러로 두 차례나 빌드가 실패했습니다.
+
+```
+pip._vendor.urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out.
+```
+
+네트워크 속도가 느려지는 구간에서 pip의 기본 read timeout(약 15초) 안에 다음 청크가 도착하지 못하면 다운로드 전체가 실패로 처리되는 것이 원인이었습니다. Dockerfile의 `pip install` 명령에 아래처럼 타임아웃과 재시도 횟수를 늘려주는 옵션을 추가해 해결했습니다.
+
+```dockerfile
+RUN pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirements.txt
+```
+
+> **개념 정리**: pip은 패키지를 내려받을 때 내부적으로 `urllib3` 커넥션 풀을 사용하는데, 기본 read timeout이 짧아서 회선이 불안정한 네트워크 환경에서는 큰 wheel 파일 하나 받다가도 쉽게 실패할 수 있음을 깨달았습니다. `--default-timeout`은 응답 대기 한계 시간을, `--retries`는 실패 시 재시도 횟수를 늘려주는 옵션으로, 특히 GitHub Actions처럼 매번 새로운 러너에서 캐시 없이 전체 의존성을 새로 받아야 하는 CI 환경에서는 필수에 가까운 안전장치라는 걸 배웠습니다.
+
+**3. `.env`를 이미지에 올리지 않기 위한 `.dockerignore`**
+
+`docker build`는 기본적으로 `Dockerfile`이 있는 디렉토리(빌드 컨텍스트) 전체를 데몬으로 보낸 뒤 그 안에서 `COPY . .`로 파일을 복사합니다. `.dockerignore`가 없으면 MySQL/MongoDB 접속 정보가 담긴 `.env`, 크롤링 원본 CSV, `.git` 히스토리까지 통째로 이미지 레이어에 박제되어, public으로 올리는 순간 그대로 유출됩니다. `.dockerignore`에 `.env`, `.git`, `test/`, 대용량 CSV 등을 명시해 컨텍스트 전송 단계에서부터 제외되도록 했습니다.
+
+> **개념 정리**: `.gitignore`가 "커밋에서 제외"라면 `.dockerignore`는 "빌드 컨텍스트/이미지에서 제외"입니다. 둘은 별개의 파일이라 `.gitignore`에만 적어두고 안심하면 안 되고, 이미지에 포함되면 안 되는 민감 정보는 반드시 `.dockerignore`에도 따로 등록해야 한다는 걸 이번에 명확히 알게 됐습니다.
+
+### RDS 활용시 보완 설정
+
+이번 과제에서 가장 어려웠던 부분은 RDS 보안 설정입니다. 퍼블릭 액세스를 '아니요'로만 하면 끝인 줄 알았는데, 그건 퍼블릭 IP를 안 받는다는 의미일 뿐이고 인스턴스가 있는 서브넷 자체는 여전히 인터넷 게이트웨이로 라우팅되는 퍼블릭 서브넷이라는 걸 알게 됐습니다. 기본 VPC의 서브넷 4개가 전부 그 상태여서, IGW 경로 없이 local만 갖는 라우팅 테이블을 따로 만들고 서브넷 2개를 연결해 프라이빗으로 바꿨습니다.
+
+그런데 이미 만들어둔 RDS를 그 프라이빗 서브넷 그룹으로 옮기려 하니 같은 VPC 안에서는 서브넷 그룹을 변경할 수 없다는 에러가 났습니다. 서브넷 그룹은 사실상 생성 시점에 결정되는 속성이라, 결국 인스턴스를 삭제하고 처음부터 프라이빗 서브넷 그룹을 지정해서 다시 만들었습니다. 네트워크 구성은 리소스 만들기 전에 먼저 설계해야 한다는 걸 배웠습니다.
+
+보안 그룹은 EC2용과 RDS용을 분리하고, RDS 인바운드 3306의 소스를 IP 대역이 아니라 EC2 보안 그룹 자체로 참조하게 설정했습니다. 이러면 EC2 IP가 바뀌어도 규칙을 안 고쳐도 되고 접근 주체가 명확해집니다. 저도 여기서 기존 CIDR 규칙의 소스를 그룹 참조로 바꾸려다 같은 에러를 만나서, 규칙 삭제 후 새로 추가해서 해결했습니다.
+
+그 외에 RDS 생성할 때 MySQL 8.0이 표준 지원 종료돼서 8.4로 사용하는 것, MongoDB 연결 문자열에 DB 이름을 빼먹으면 get_database()가 실패한다는 것, 도커 그룹 권한은 재로그인해야 적용된다는 것도 알 수 있었습니다.
+
+### 로드 밸랜서 설정
+
+이번 과제에서 가장 헤맸던 부분은 로드 밸런서 설정이었습니다. ALB는 트래픽을 받기만 할 뿐 어디로 보낼지는 스스로 알지 못하고, 그 "목적지 서버 명단"을 정의하는 것이 대상 그룹(Target Group) 이라는 점을 이해하는 데 시간이 걸렸습니다. ALB는 80번 포트로 받지만 실제 앱은 8000번에서 돌기 때문에 대상 그룹은 8000을 기준으로 설정해야 했고, 상태 검사 경로도 /로 두면 404가 떠 계속 unhealthy가 되어 /health 엔드포인트를 따로 추가해 해결했습니다.
+
+또한 EC2 보안 그룹에서 기존 0.0.0.0/0 규칙의 소스를 ALB 보안 그룹으로 변경하려 하자 CIDR 관련 오류가 나서, 기존 규칙을 삭제하고 새 규칙으로 추가하여 해결했습니다.
