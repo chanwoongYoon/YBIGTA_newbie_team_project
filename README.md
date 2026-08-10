@@ -606,6 +606,23 @@ MongoDB Atlas 역시 IP Access List에 EC2의 탄력적 IP만 등록하여 허�
 ![프라이빗 라우팅 테이블](aws/private_route_table.png)
 ![RDS 보안 그룹 인바운드 규칙](aws/rds_security_group.png)
 
+## 로드 밸런서를 통한 포트 은닉
+
+EC2 인스턴스의 애플리케이션 포트(8000)를 인터넷에 직접 노출하지 않고, Application Load Balancer(ALB)를 거쳐서만 접근할 수 있도록 구성했습니다.
+
+### 1. ALB 리스너 및 라우팅
+
+ALB는 `HTTP:80` 리스너로 외부 요청을 받아 대상 그룹 `ybigta-tg`(EC2 인스턴스의 8000번 포트)로 전달합니다. 사용자는 ALB의 퍼블릭 DNS(`ybigta-alb-....ap-northeast-2.elb.amazonaws.com`)로만 접근하며, EC2의 실제 주소나 포트는 알 필요가 없습니다.
+
+### 2. EC2 보안 그룹: ALB 보안 그룹만 인바운드 허용
+
+EC2 보안 그룹(`ybigta-ec2-sg`)의 8000번 포트 인바운드 소스를 `0.0.0.0/0`이 아닌 **ALB 보안 그룹(`sg-085121f1c56ad3b44`) 참조**로 제한했습니다. 즉 ALB를 거치지 않고 EC2의 8000번 포트로 직접 요청을 보내는 경로는 차단됩니다. 22번(SSH)만 운영 편의상 `0.0.0.0/0`으로 열려 있습니다.
+
+RDS 보안 그룹 설정과 동일하게, CIDR 대신 보안 그룹을 참조하도록 하여 ALB 외의 출처는 원천적으로 접근할 수 없습니다.
+
+![ALB 리스너 및 라우팅](aws/ALB_Listeners_and_Routing.png)
+![EC2 보안 그룹 인바운드 규칙 - 8000번 포트는 ALB 보안 그룹만 허용](aws/EC2_instance_security_group.png)
+
 ## 트러블슈팅
 
 ### RDS 생성 실패 — MySQL 8.0 표준 지원 종료
