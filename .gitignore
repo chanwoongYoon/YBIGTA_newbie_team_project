@@ -51,8 +51,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -209,12 +209,6 @@ pyrightconfig.json
 ### venv ###
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
-[Bb]in
-[Ii]nclude
-[Ll]ib
-[Ll]ib64
-[Ll]ocal
-[Ss]cripts
 pyvenv.cfg
 pip-selfcheck.json
 
@@ -284,7 +278,6 @@ ai_logs/
 .env.local
 .env.development
 .env.production
-.env.*
 
 ### FastAPI ###
 # Uvicorn, Gunicorn 등 웹 서버 구동 로그

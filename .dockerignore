@@ -30,3 +30,6 @@ aws/
 database/*.csv
 database/debug_page.html
 database/debug_screenshot.png
+
+# vercel
+web/ 
