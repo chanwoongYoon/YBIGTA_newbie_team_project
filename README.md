@@ -870,3 +870,26 @@ DB 접속 정보와 인증 토큰은 모두 환경변수로 관리하며, 코드
                ▼
              사용자
 ```
+
+### 데이터 수집 → DB → MCP → Agent 흐름
+
+전체 파이프라인은 위 다이어그램의 4단계를 그대로 따른다.
+
+1. **수집 (Collector, EC2 Public Subnet)** — `collector/main.py`가 cron으로 30분마다 Goodreads GraphQL API를 호출해 리뷰를 가져오고(`fetch_reviews`), 스키마에 맞게 변환한 뒤(`transform`) `collector_user`(SELECT/INSERT/UPDATE 권한) 계정으로 RDS에 upsert한다. 자세한 내용은 위 [Data Pipeline](#data-pipeline) 절 참고.
+2. **DB (RDS MySQL, Private Subnet)** — `reviews` 테이블 하나에 모든 출처(`source` 컬럼으로 구분)의 리뷰가 쌓인다. `Publicly accessible = No`로 인터넷에서는 접근 경로 자체가 없고, 같은 VPC의 `mcp-sg` 보안그룹에 속한 인스턴스만 3306 포트로 접근 가능하다.
+3. **MCP (MCP Server, EC2 Public Subnet, Docker)** — Agent(LLM)는 DB에 직접 연결하지 않고 MCP Server가 노출하는 7개 Tool(`get_latest_reviews`, `search_reviews`, `aggregate_reviews`, `get_keyword_stats` 등, 자세한 목록은 [`mcp_server/README.md`](mcp_server/README.md#mcp-tool-목록-7개))만 호출한다. MCP Server는 `mcp_user`(**SELECT 전용**) 계정으로만 DB를 조회하고, `tools → services → repositories` 계층을 거쳐 파라미터화된 쿼리만 실행하므로 Raw SQL이 Agent까지 전달될 일이 없다. 모든 요청은 `Authorization: Bearer <MCP_AUTH_TOKEN>` 인증을 거친다.
+4. **Agent (Next.js, Vercel)** — 사용자가 브라우저에 질문을 입력하면 `app/api/chat/route.ts`(서버 사이드)가 LLM에게 사용 가능한 MCP Tool 목록을 전달하고, LLM이 상황에 맞는 Tool과 인자를 선택한다. 서버가 `lib/mcpClient.ts`로 MCP Server를 호출해 결과를 받아오고, 이를 다시 LLM에 넘겨 자연어 응답으로 조립한 뒤 브라우저에 반환한다. `MCP_SERVER_URL`/`MCP_AUTH_TOKEN`/`OPENAI_API_KEY`는 서버 환경변수로만 존재하며 `NEXT_PUBLIC_` 접두사를 쓰지 않으므로 클라이언트 번들에 노출되지 않는다.
+
+이 구조 덕분에 LLM은 DB 자격 증명이나 스키마를 전혀 알지 못한 채, 화이트리스트로 정의된 MCP Tool 호출만으로 데이터를 조회한다.
+
+### Chat UI 디자인 (Figma)
+
+위 흐름의 4단계(Agent)가 사용자에게 보여지는 화면은 Figma로 먼저 설계했다.
+
+![Data Analysis Agent - Chat UI](aws/figma_design.png)
+
+- 좌측 사이드바: 대화 목록(`요즘 리뷰 키워드는?`, `별점 추이 분석`, `긍정/부정 리뷰 비율`)과 현재 분석 대상 도서(『불편한 편의점』, 실시간 리뷰 수집 건수) 표시
+- 채팅 영역: 사용자 질문 → MCP Tool 호출 배지(`MCP · get_keyword_stats() 호출됨`) → Tool 실행 결과를 카드(순위/키워드/횟수, 하단 캡션에 분석 대상 기간·건수) 형태로 렌더링
+- 하단 추천 질문 칩(`별점 추이 보기`, `긍정 리뷰 비율`)으로 다음 대화를 유도
+
+이 목업은 `web/components/MessageBubble.tsx` · `McpBadge.tsx` 구현의 기준 디자인이며, MCP Tool 호출 여부와 결과가 사용자에게 항상 함께 노출되도록 하는 것이 핵심 의도다.
