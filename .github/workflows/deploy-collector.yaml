@@ -50,8 +50,14 @@ jobs:
             # 기존에 3.9로 만들어진 venv가 남아있을 수 있으니 항상 3.11로 새로 만듭니다.
             rm -rf venv
             python3.11 -m venv venv
+
+            # /tmp가 457M짜리 tmpfs라 pandas/scikit-learn/kiwipiepy 같은 무거운 패키지를
+            # 빌드할 때 공간이 부족해집니다. 루트 파티션(여유 5G+) 쪽에 임시 디렉토리를 만들어 사용합니다.
+            export TMPDIR=~/ybigta-collector/.pip-tmp
+            mkdir -p "$TMPDIR"
             ./venv/bin/pip install --upgrade pip -q
             ./venv/bin/pip install -r requirements.txt -q
+            rm -rf "$TMPDIR"
 
             # 1시간마다 실행. 간격을 바꾸려면 이 cron 표현식만 수정하면 됩니다.
             CRON_MARKER="# ybigta-collector-cron"
