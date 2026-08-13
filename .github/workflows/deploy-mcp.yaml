@@ -9,6 +9,7 @@ on:
     paths:
       - "mcp_server/**"
       - ".github/workflows/deploy-mcp.yaml"
+  workflow_dispatch: {}
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/ybigta-mcp-server
