@@ -1,6 +1,7 @@
 # env / secrets
 .env
 .env.*
+*.pem
 
 # git
 .git

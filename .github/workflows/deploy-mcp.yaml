@@ -1,0 +1,70 @@
+name: Build, Push and Deploy MCP Server
+
+# mcp_server/ 하위 코드가 실제로 추가되기 전까지는 트리거되지 않습니다.
+# (Agent 과제 명세: MCP Server는 Docker Image로 EC2에 배포하되, 내부 포트를 인터넷에 직접 노출하지 않아야 함)
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mcp_server/**"
+      - ".github/workflows/deploy-mcp.yaml"
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/ybigta-mcp-server
+
+jobs:
+  build-and-push:
+    name: Build and Push MCP Server Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./mcp_server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy:
+    name: Deploy MCP Server to EC2 (Public Subnet, internal port only)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2 over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # collector와 같은 EC2(Public Subnet, mcp-sg)를 재사용합니다 — 별도 인스턴스가 아닙니다.
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ybigta-mcp-server:latest
+            docker stop mcp-server || true
+            docker rm mcp-server || true
+
+            # 중요: 호스트 루프백(127.0.0.1)에만 바인딩합니다.
+            # 0.0.0.0:8000으로 열면 MCP 내부 포트가 인터넷에 그대로 노출되어 과제 보안 요구사항 위반입니다.
+            # 외부 요청은 EC2에 이미 구성된 Nginx 리버스 프록시(80/443)를 통해서만 mcp-server:8000 로 전달되어야 합니다.
+            docker run -d \
+              --name mcp-server \
+              --restart unless-stopped \
+              --env-file ~/.env \
+              -p 127.0.0.1:8000:8000 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/ybigta-mcp-server:latest
+
+            docker image prune -f
