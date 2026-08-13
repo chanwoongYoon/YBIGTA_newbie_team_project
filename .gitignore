@@ -292,3 +292,4 @@ test.db
 test.sqlite3*.env
 *.pem
 tableau/
+*~
