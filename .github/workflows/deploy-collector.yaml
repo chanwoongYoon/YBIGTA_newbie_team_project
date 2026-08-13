@@ -43,7 +43,13 @@ jobs:
             # .env는 CI가 만들지 않습니다. EC2에 미리 수동으로 준비해둔
             # ~/ybigta-collector/.env (MYSQL_HOST/PORT/USER/PASSWORD/DATABASE)를 그대로 사용합니다.
 
-            python3 -m venv venv 2>/dev/null || true
+            # requirements.txt의 최신 패키지들은 Python 3.10+ 를 요구합니다.
+            # EC2(Amazon Linux 2023) 기본 python3는 3.9라 별도로 python3.11을 설치해 사용합니다.
+            sudo dnf install -y python3.11 >/dev/null
+
+            # 기존에 3.9로 만들어진 venv가 남아있을 수 있으니 항상 3.11로 새로 만듭니다.
+            rm -rf venv
+            python3.11 -m venv venv
             ./venv/bin/pip install --upgrade pip -q
             ./venv/bin/pip install -r requirements.txt -q
 
