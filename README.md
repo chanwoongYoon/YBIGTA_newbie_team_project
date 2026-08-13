@@ -825,3 +825,48 @@ DB 접속 정보와 인증 토큰은 모두 환경변수로 관리하며, 코드
 1. `review_analysis/crawling/` 에 크롤러를 추가한다
 2. `collector/main.py`의 `transform()`이 반환하는 dict 형식(`source`, `review_key`, `stars`, `review`, `review_date`, `sentiment_label`)에 맞춰 매핑한다
 3. `SOURCE` 상수만 새 출처명으로 지정하면 동일한 upsert 로직이 그대로 재사용된다
+
+## Architecture
+
+```
+┌─────────────────────────────┐
+│ Data Source                 │
+│ Goodreads GraphQL API       │
+└──────────────┬──────────────┘
+               │ 30분 주기 자동 수집 (cron)
+               ▼
+┌─────────────────────────────┐
+│ AWS Data Collector          │
+│ EC2 (Amazon Linux 2023)     │
+│ collector/main.py           │
+└──────────────┬──────────────┘
+               │ upsert (collector_user)
+               ▼
+┌───────────────────────────────────────────┐
+│ AWS VPC  ybigta-vpc (10.0.0.0/16)         │
+│                                           │
+│  Public Subnet                            │
+│  ┌─────────────────────────────────┐      │
+│  │ EC2 : MCP Server (Docker)       │◀─────┼── Vercel
+│  │  Nginx Reverse Proxy → :8000    │      │   (Bearer Auth)
+│  │  tools → services → repositories│      │
+│  │  SG: mcp-sg                     │      │
+│  └───────────────┬─────────────────┘      │
+│                  │ 3306 (mcp_user, R/O)   │
+│  Private Subnet  ▼                        │
+│  ┌─────────────────────────────────┐      │
+│  │ RDS MySQL 8.4                   │      │
+│  │  Public Access: OFF             │      │
+│  │  SG: rds-sg ← mcp-sg only       │      │
+│  └─────────────────────────────────┘      │
+└───────────────────────────────────────────┘
+               ▲
+               │ MCP Tool Call
+               │
+┌──────────────┴──────────────┐
+│ Vercel / Next.js Data Agent │
+│  app/api/chat/route.ts      │
+└──────────────┬──────────────┘
+               ▼
+             사용자
+```
