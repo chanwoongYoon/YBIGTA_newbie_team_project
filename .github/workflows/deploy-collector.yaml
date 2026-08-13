@@ -1,0 +1,62 @@
+name: Deploy Collector
+
+# collector/, review_analysis/ 변경 시에만 트리거.
+# Docker 컨테이너로 상시 구동하는 서비스가 아니라, 기존(이전 과제) EC2에 코드만 동기화하고
+# crontab이 주기적으로 collector/main.py를 실행하는 방식입니다. (Agent 과제 PDF: MVP는 EC2 + cron으로 충분)
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "collector/**"
+      - "review_analysis/**"
+      - "requirements.txt"
+      - ".github/workflows/deploy-collector.yaml"
+
+jobs:
+  sync-and-schedule:
+    name: Sync collector code to EC2 and (re)register cron job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy collector code to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "collector,review_analysis,requirements.txt"
+          target: "~/ybigta-collector"
+
+      - name: Install deps and (re)register cron job
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/ybigta-collector
+
+            # .env는 CI가 만들지 않습니다. EC2에 미리 수동으로 준비해둔
+            # ~/ybigta-collector/.env (MYSQL_HOST/PORT/USER/PASSWORD/DATABASE)를 그대로 사용합니다.
+
+            # requirements.txt의 최신 패키지들은 Python 3.10+ 를 요구합니다.
+            # EC2(Amazon Linux 2023) 기본 python3는 3.9라 별도로 python3.11을 설치해 사용합니다.
+            sudo dnf install -y python3.11 >/dev/null
+
+            # 기존에 3.9로 만들어진 venv가 남아있을 수 있으니 항상 3.11로 새로 만듭니다.
+            rm -rf venv
+            python3.11 -m venv venv
+            ./venv/bin/pip install --upgrade pip -q
+            ./venv/bin/pip install -r requirements.txt -q
+
+            # 1시간마다 실행. 간격을 바꾸려면 이 cron 표현식만 수정하면 됩니다.
+            CRON_MARKER="# ybigta-collector-cron"
+            CRON_CMD="0 * * * * cd ~/ybigta-collector && ~/ybigta-collector/venv/bin/python collector/main.py >> ~/ybigta-collector/collector.log 2>&1 $CRON_MARKER"
+            ( crontab -l 2>/dev/null | grep -vF "$CRON_MARKER" ; echo "$CRON_CMD" ) | crontab -
+
+            echo "registered cron:"
+            crontab -l
