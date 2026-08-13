@@ -1,0 +1,26 @@
+# env / secrets
+.env
+.env.*
+*.pem
+
+# git
+.git
+.github
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+
+# tests
+tests/
