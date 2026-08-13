@@ -654,3 +654,174 @@ RUN pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirement
 보안 그룹은 EC2용과 RDS용을 분리하고, RDS 인바운드 3306의 소스를 IP 대역이 아니라 EC2 보안 그룹 자체로 참조하게 설정했습니다. 이러면 EC2 IP가 바뀌어도 규칙을 안 고쳐도 되고 접근 주체가 명확해집니다. 저도 여기서 기존 CIDR 규칙의 소스를 그룹 참조로 바꾸려다 같은 에러를 만나서, 규칙 삭제 후 새로 추가해서 해결했습니다.
 
 그 외에 RDS 생성할 때 MySQL 8.0이 표준 지원 종료돼서 8.4로 사용하는 것, MongoDB 연결 문자열에 DB 이름을 빼먹으면 get_database()가 실패한다는 것, 도커 그룹 권한은 재로그인해야 적용된다는 것도 알 수 있었습니다.
+
+
+# AI Agent 과제 — 데이터 수집 & AWS 인프라
+
+## Data Pipeline
+
+### 어떤 데이터를 수집하는가
+
+Goodreads에 등록된 김호연 작가의 소설 『불편한 편의점(The Uncommon Librarian / 원제 기준 동일 작품)』에 대한 **독자 리뷰**를 수집한다.
+
+- 수집 항목: 평점(stars), 리뷰 본문(review), 작성일(review_date)
+- 수집 방식: Goodreads 내부 GraphQL API를 `requests`로 직접 호출 (Selenium 미사용)
+- 1회 실행당 최신 리뷰 최대 300건
+
+Selenium 기반 크롤러(YES24, 교보문고)도 앞선 과제에서 구현했으나, EC2 t3.micro(vCPU 2, RAM 1GB) 환경에서 Chrome/chromedriver 구동이 불안정하여 **자동 수집 대상에서는 제외**했다. 자동화 안정성을 우선해 HTTP 요청만으로 동작하는 Goodreads API를 선택했다.
+
+### 어떤 주기로 갱신되는가
+
+**30분 간격**으로 자동 수집한다.
+
+```
+*/30 * * * * cd /home/ec2-user/project && \
+  /home/ec2-user/project/venv/bin/python -m collector.main \
+  >> /home/ec2-user/collector.log 2>&1
+```
+
+수집 파이프라인은 다음 3단계로 동작한다.
+
+```
+Goodreads GraphQL API
+        ↓  fetch_reviews()
+    원본 리뷰 (stars, date, review)
+        ↓  transform()
+    DB 스키마 매핑 + review_key 생성 + sentiment_label 파생
+        ↓  save_reviews()
+    RDS MySQL upsert (INSERT ... ON DUPLICATE KEY UPDATE)
+```
+
+`review_key`는 `source + review_date + review` 문자열의 SHA-256 해시 앞 40자다. 동일한 리뷰는 항상 같은 키가 생성되므로, 반복 수집해도 중복 행이 쌓이지 않고 기존 행의 `collected_at`과 `updated_at`만 갱신된다.
+
+`sentiment_label`은 평점에서 파생한다. 4점 이상은 `positive`, 2점 이하는 `negative`, 그 외는 `neutral`이다.
+
+### 어떤 AWS 기능을 사용하는가
+
+| 구성 요소 | 사용 서비스 |
+|---|---|
+| 수집 실행 환경 | EC2 (Amazon Linux 2023, t3.micro, Public Subnet) |
+| 스케줄링 | cron (cronie) |
+| 데이터 저장소 | RDS MySQL 8.4 (db.t3.micro, Private Subnet) |
+| 네트워크 격리 | VPC, Public/Private Subnet, Security Group |
+
+EventBridge + Lambda 조합도 검토했으나, 크롤러가 이미 파이썬 스크립트로 완성되어 있어 EC2에 cron을 거는 방식이 MVP 구현 속도 면에서 유리하다고 판단했다.
+
+### DB Schema
+
+데이터베이스는 `review_db`, 테이블은 `reviews` 하나다.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | BIGINT AI PK | 내부 식별자 |
+| `source` | VARCHAR(20) | 수집 출처 (goodreads / yes24 / kyobo) |
+| `review_key` | VARCHAR(200) | 리뷰 고유 식별값 (SHA-256 해시) |
+| `stars` | FLOAT | 평점 |
+| `review` | TEXT | 리뷰 본문 |
+| `review_date` | DATE | 리뷰 작성일 |
+| `sentiment_label` | VARCHAR(20) | positive / neutral / negative |
+| `created_at` | DATETIME | 최초 적재 시각 |
+| `updated_at` | DATETIME | 내용 변경 시각 (ON UPDATE CURRENT_TIMESTAMP) |
+| `collected_at` | DATETIME | 최근 수집 시각 |
+
+제약 및 인덱스는 다음과 같다.
+
+- `UNIQUE KEY uk_source_review (source, review_key)` — upsert 기준 키이자 중복 방지
+- `INDEX idx_review_date`, `idx_source`, `idx_collected_at` — MCP 조회 성능 확보
+
+`source` 컬럼을 둔 이유는, 이후 YES24·교보문고 등 다른 출처를 추가할 때 테이블 구조를 바꾸지 않고 행만 늘리면 되도록 하기 위해서다.
+
+### 자동 갱신 확인
+
+30분 간격으로 cron이 실행된 로그와, 서로 다른 시각에 데이터가 갱신된 결과는 아래 캡처에서 확인할 수 있다.
+
+![data_update](aws/data_update.png)
+
+---
+
+## AWS VPC / DB 구조 및 보안 설계
+
+### 전체 네트워크 구조
+
+```
+ybigta-vpc (10.0.0.0/16)
+│
+├── Public Subnet (2a, 2b)
+│   └── EC2  ─ collector (cron)
+│            ─ MCP Server
+│            SG: mcp-sg
+│
+└── Private Subnet (2a, 2b)
+    └── RDS MySQL 8.4
+        Publicly accessible: No
+        SG: rds-sg  (inbound 3306 ← mcp-sg only)
+```
+
+NAT Gateway는 생성하지 않았다. RDS는 외부 인터넷으로 나갈 필요가 없으며, 불필요한 시간당 과금을 피하기 위함이다.
+
+### 왜 DB를 Private Subnet에 두었는가
+
+RDS를 Private Subnet에 배치하고 `Publicly accessible = No`로 설정하면 퍼블릭 IP가 할당되지 않는다. 즉 인터넷 구간에서 DB로 향하는 경로 자체가 존재하지 않으므로, 자격 증명이 유출되더라도 외부에서 직접 접속할 수 없다.
+
+DB에 접근할 수 있는 주체는 동일 VPC 내부 리소스뿐이며, 실제로는 `mcp-sg`에 속한 EC2로 한정된다. 관리자가 로컬에서 DB 작업을 할 때도 EC2를 경유하는 SSH 터널을 사용했다.
+
+```
+[로컬] --SSH(22)--> [EC2 Public Subnet] --MySQL(3306)--> [RDS Private Subnet]
+```
+
+![rds_private](aws/rds_private.png)
+
+### RDS Security Group은 어떻게 설정했는가
+
+`rds-sg`의 인바운드 규칙은 단 하나다.
+
+| 유형 | 프로토콜 | 포트 | 소스 |
+|---|---|---|---|
+| MYSQL/Aurora | TCP | 3306 | `sg-0746da33d000e47ef` (mcp-sg) |
+
+소스를 CIDR이 아니라 **보안 그룹 참조**로 지정한 점이 핵심이다. IP 대역으로 열어두면 해당 대역의 다른 인스턴스도 접근할 수 있지만, 보안 그룹 참조 방식은 `mcp-sg`에 속한 인스턴스만 통과시킨다. EC2의 IP가 바뀌어도 규칙을 수정할 필요가 없다는 이점도 있다.
+
+`0.0.0.0/0 → 3306` 형태의 규칙은 존재하지 않는다.
+
+![security_group](aws/security_group.png)
+
+### DB 계정 분리
+
+역할에 따라 계정을 분리하고 최소 권한만 부여했다.
+
+| 계정 | 권한 | 용도 |
+|---|---|---|
+| `admin` | ALL | 스키마 관리 (DDL 실행 시에만 사용) |
+| `collector_user` | SELECT, INSERT, UPDATE | 수집 프로그램 전용 |
+| `mcp_user` | **SELECT only** | MCP Server 전용 |
+
+MCP Server는 데이터를 조회하기만 하면 되므로 `mcp_user`에는 읽기 권한만 부여했다. LLM이 예상치 못한 동작을 하거나 MCP 서버가 탈취되더라도, DB 계정 수준에서 `DROP` / `DELETE` / `UPDATE`가 원천 차단된다. `collector_user` 역시 `DELETE`와 `DROP` 권한이 없어 수집 과정의 실수로 데이터가 소실되지 않는다.
+
+```
+mysql> SHOW GRANTS FOR 'mcp_user'@'%';
++-------------------------------------------------+
+| GRANT USAGE ON *.* TO `mcp_user`@`%`            |
+| GRANT SELECT ON `review_db`.* TO `mcp_user`@`%` |
++-------------------------------------------------+
+```
+
+### API Key와 Token은 어디에서 관리하는가
+
+DB 접속 정보와 인증 토큰은 모두 환경변수로 관리하며, 코드나 Git 저장소에 포함되지 않는다.
+
+- 로컬 및 EC2: 프로젝트 루트의 `.env` 파일에서 `python-dotenv`로 로드
+- `.gitignore`에 `.env`와 `*.pem`이 등록되어 있어 커밋 대상에서 제외
+- `.dockerignore`에도 동일하게 반영
+- 저장소에는 값이 비어 있는 `.env.example`만 포함
+
+`collector/db.py`는 `os.getenv()`로만 접속 정보를 읽으며, 하드코딩된 자격 증명은 존재하지 않는다.
+
+---
+
+## 새로운 데이터 소스를 추가하려면
+
+`reviews` 테이블의 `source` 컬럼과 `(source, review_key)` 복합 유니크 키 덕분에, 새 출처를 추가할 때 스키마 변경이 필요 없다.
+
+1. `review_analysis/crawling/` 에 크롤러를 추가한다
+2. `collector/main.py`의 `transform()`이 반환하는 dict 형식(`source`, `review_key`, `stars`, `review`, `review_date`, `sentiment_label`)에 맞춰 매핑한다
+3. `SOURCE` 상수만 새 출처명으로 지정하면 동일한 upsert 로직이 그대로 재사용된다
